@@ -49,12 +49,61 @@ claude "/batch audit all API endpoints for IDOR"
 | vuln-analyzer | Deep-dive on specific vuln classes |
 | exploit-writer | PoC development (authorized only) |
 | report-writer | HackerOne report formatting |
+| **learner** | **Self-improving: learns from hunts, creates/refines skills** |
 
 ## Skills
 
+### Hunting Skills
 | Skill | Usage |
 |-------|-------|
 | /recon | Full reconnaissance pipeline |
 | /analyze | Vulnerability analysis |
 | /report | Generate HackerOne report |
 | /checklist | OWASP Top 10 checklist scan |
+
+### Self-Learning Skills (Hermes-style)
+| Skill | Usage |
+|-------|-------|
+| /learn | Capture a technique as a reusable skill |
+| /after-hunt | Post-hunt feedback loop (auto-updates memory + skills) |
+| /memory | Review and manage persistent knowledge |
+| /memory target [name] | Create/update a target profile |
+
+### Auto-Learned Skills
+Skills created by the learning loop live in:
+`.claude/skills/learned/hunt-[type].md`
+
+They are automatically invoked when you search
+for that vulnerability type. The more you use
+them, the better they get.
+
+## Memory System (Hermes-style)
+
+Three persistent memory layers:
+
+| File | Purpose | Updated By |
+|------|---------|------------|
+| MEMORY.md | Techniques, patterns, stats | /after-hunt, /learn |
+| TARGETS.md | Target profiles & findings | /memory target, /after-hunt |
+| CLAUDE.md | Pipeline config & instructions | Manual |
+
+## Self-Improvement Loop
+
+```
+Hunt for bugs
+    ↓
+Find vulnerability
+    ↓
+/after-hunt (automatic)
+    ↓
+├→ Update MEMORY.md (new technique)
+├→ Update TARGETS.md (new finding)
+├→ Create/refine skill in learned/
+└→ Cross-reference other targets
+    ↓
+Next hunt is faster + smarter
+```
+
+Every hunt makes the pipeline better.
+Skills track their own success rate and
+refine their search patterns over time.
