@@ -5,16 +5,33 @@
 
 ## Techniques Library
 
-_No techniques learned yet. Run /after-hunt
-after your first successful find._
+### Learned: 2026-04-13 — IDOR (Insecure Direct Object Reference)
+- Target: DemoCorp
+- Severity: High (CVSS 7.5)
+- Pattern: Numeric sequential IDs in REST API
+  without ownership validation
+- Discovery method:
+  1. Found `/api/v2/orders/{id}` in recon
+  2. Noticed IDs are sequential integers
+  3. Changed ID from 1001 → 1002
+  4. Got another user's order data
+- Key grep patterns:
+  - `/api/.*/:id` or `/api/.*/[0-9]+`
+  - `params.id` without `req.user` check
+  - `findById` without `where: { userId }`
+- False positives:
+  - Public resources (no auth needed)
+  - UUIDs (not guessable)
+- Skill: `hunt-idor`
 
 ## High-Value Patterns
 
 ### Patterns That Pay Well
-_Updated as you earn bounties._
+- IDOR on order/payment endpoints — High sev
 
 ### Common False Positives
-_Updated as you filter noise._
+- Public API endpoints (no auth = not IDOR)
+- UUID-based IDs (not enumerable)
 
 ## Tool Shortcuts
 
@@ -38,7 +55,7 @@ grep -rn "exec\|eval\|system\|query\|innerHTML\|document.write\|fetch\|axios" --
 
 ## Stats
 
-- Total hunts: 0
-- Total findings: 0
-- Total bounties: $0
-- Skills learned: 0
+- Total hunts: 1
+- Total findings: 1
+- Total bounties: $0 (pending)
+- Skills learned: 1
