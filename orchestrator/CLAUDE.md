@@ -47,6 +47,7 @@ claude "/batch audit all API endpoints for IDOR"
 | recon-agent | Subdomain, endpoint, tech discovery |
 | code-auditor | Source code vulnerability analysis |
 | vuln-analyzer | Deep-dive on specific vuln classes |
+| **bounty-verifier** | **Adversarial exploit proof. VERDICT: EXPLOITABLE/NOT/PARTIAL** |
 | exploit-writer | PoC development (authorized only) |
 | report-writer | HackerOne report formatting |
 | **learner** | **Self-improving: learns from hunts, creates/refines skills** |
@@ -61,6 +62,7 @@ claude "/batch audit all API endpoints for IDOR"
 | /report | Generate HackerOne report |
 | /checklist | OWASP Top 10 checklist scan |
 | /security-review | Senior-engineer-grade review with 17 false-positive filters + confidence scoring (>= 8) |
+| /verify | **Adversarial exploit verification — prove before you report** |
 
 ### Self-Learning Skills (Hermes-style)
 | Skill | Usage |
@@ -134,3 +136,33 @@ memory safety in safe languages, etc.
 
 This matches the bar of a senior security
 engineer reviewing a PR — not a noisy scanner.
+
+## Professional Hunt Workflow
+
+The full pipeline for quality reports:
+
+```
+1. /recon target.com
+   → map attack surface
+
+2. /security-review [path]
+   → find candidates (confidence >= 8)
+
+3. /verify [finding]
+   → bounty-verifier proves exploitation
+   → VERDICT: EXPLOITABLE / NOT / PARTIAL
+
+4. /report
+   → only if EXPLOITABLE verdict
+   → full HackerOne writeup with PoC
+
+5. /after-hunt
+   → capture technique
+   → refine hunt-[type] skill
+   → update MEMORY.md + TARGETS.md
+```
+
+**The `/verify` step is non-negotiable.**
+Never submit findings you haven't exploited.
+This is the difference between a $5000
+bounty and a "Informative" close.
