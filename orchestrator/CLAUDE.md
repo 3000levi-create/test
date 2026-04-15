@@ -60,6 +60,7 @@ claude "/batch audit all API endpoints for IDOR"
 | /analyze | Vulnerability analysis |
 | /report | Generate HackerOne report |
 | /checklist | OWASP Top 10 checklist scan |
+| /security-review | Senior-engineer-grade review with 17 false-positive filters + confidence scoring (>= 8) |
 
 ### Self-Learning Skills (Hermes-style)
 | Skill | Usage |
@@ -107,3 +108,29 @@ Next hunt is faster + smarter
 Every hunt makes the pipeline better.
 Skills track their own success rate and
 refine their search patterns over time.
+
+## Quality Standards (from Claude Code source)
+
+All agents now apply senior-security-engineer
+rigor from Claude Code's `/security-review`:
+
+### Confidence Threshold: >= 8/10
+Findings below confidence 8 are dropped.
+No noise, no speculation.
+
+### 17 Hard Exclusions
+DoS, rate limits, memory issues, test files,
+log spoofing, path-only SSRF, regex injection,
+documentation findings, outdated CVEs,
+memory safety in safe languages, etc.
+
+### 12 Precedents (Nuanced)
+- React/Angular XSS-safe by default
+- UUIDs unguessable → not IDOR
+- Client-side auth checks → not vulns
+- Environment variables → trusted
+- Shell command injection rarely exploitable
+- Logging URLs safe, logging secrets = vuln
+
+This matches the bar of a senior security
+engineer reviewing a PR — not a noisy scanner.
