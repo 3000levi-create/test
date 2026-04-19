@@ -277,6 +277,44 @@ For each finding with confidence >= 8:
 
 ---
 
+## RED TEAM LENS
+
+Don't just find bugs — think like an attacker.
+
+### For every finding, ask:
+1. **"What does this give an attacker?"** —
+   a session? credentials? internal access?
+2. **"What's the next step after exploiting
+   this?"** — privilege escalation? lateral
+   movement? data exfil?
+3. **"Can this chain with other findings?"** —
+   XSS + CSRF? IDOR + missing rate limit?
+   SSRF + cloud metadata?
+
+### Attack Surface Priorities (attacker POV)
+Think about what a real attacker targets first:
+- **Auth endpoints** — login, register, reset
+  password, OAuth callback
+- **Payment/money flows** — checkout, refund,
+  transfer, balance
+- **Admin panels** — any /admin, /dashboard,
+  /manage route
+- **File operations** — upload, download,
+  import, export
+- **API endpoints accepting IDs** — IDOR heaven
+- **Webhook/callback URLs** — SSRF entry points
+- **Search/filter endpoints** — injection sinks
+
+### Chain Potential Tag
+For each finding, add a chain assessment:
+
+```markdown
+## Chain Potential: HIGH / MEDIUM / LOW
+- This finding unlocks: [what]
+- Possible chains: [A → B → impact]
+- Recommend: /attack-chain after all findings
+```
+
 ## Tips
 
 - Start from entry points (routes, API handlers,
@@ -287,3 +325,4 @@ For each finding with confidence >= 8:
   a single line
 - If unsure whether something is exploitable,
   don't report it
+- **Think chains, not individual bugs**

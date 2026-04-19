@@ -274,9 +274,28 @@ Rate using standard CVSS:
 [Can this be chained with other vulns to
 increase impact?]
 
+### Red Team Chain Analysis
+- **This finding gives attacker**: [what access/data]
+- **Post-exploitation**: [what can they do next]
+- **Persistence opportunity**: [can they maintain access]
+- **Lateral movement**: [can they reach other systems]
+- **Chain candidates**:
+  - [This] + [other finding] → [higher impact]
+  - [This] → [next step] → [full compromise]
+- **Chain severity**: [if chained, severity becomes X]
+
+### Kill Chain Position
+This finding sits at: [INITIAL ACCESS / EXECUTION /
+PRIV ESCALATION / LATERAL MOVEMENT / EXFILTRATION]
+
+### Attacker Narrative
+"An attacker would exploit this by [step 1],
+which gives them [access]. From there, they
+could [step 2], ultimately achieving [impact]."
+
 ## Estimated Bounty
-$X,XXX - $XX,XXX (based on program payout
-and severity)
+- Individual: $X,XXX
+- If chained: $XX,XXX (via /attack-chain)
 ```
 
 ---
@@ -294,3 +313,36 @@ If confidence < 8, output:
 ```
 
 Don't silently skip — be explicit about why.
+
+---
+
+## RED TEAM DEEP DIVE PATTERNS
+
+When analyzing, think like a pentester:
+
+### Privilege Boundary Analysis
+For every auth/access finding:
+- Map ALL roles: guest → user → mod → admin
+- Test EVERY transition between roles
+- Check: can user A access admin endpoints
+  by changing one parameter?
+- Check: horizontal access (user A → user B)
+- Check: vertical access (user → admin)
+
+### Trust Boundary Analysis
+For every data flow:
+- Where does the app trust external input?
+- Where does it trust internal services?
+- Where does internal become external?
+  (user input stored then rendered to others)
+- Where do microservices trust each other?
+  (SSRF from service A → service B trusts A)
+
+### Business Logic Analysis
+Beyond technical vulns, check:
+- **Race conditions**: buy 1 get 2 (TOCTOU)
+- **Negative values**: refund more than paid
+- **Currency rounding**: exploit float precision
+- **State confusion**: skip steps in a flow
+- **Coupon stacking**: apply multiple discounts
+- **Free tier abuse**: bypass plan limits

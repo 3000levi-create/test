@@ -196,6 +196,24 @@ For every candidate, try at least one:
 - **Defense bypass**: known WAF evasion for
   the payload type
 
+## RED TEAM EVASION AWARENESS
+
+A real attacker would try to bypass defenses.
+Test these (within scope):
+
+- **WAF evasion**: chunked encoding, parameter
+  pollution, case mixing, comment injection
+  (`SEL/**/ECT`), alternative syntax
+- **Rate limit bypass**: rotate headers
+  (X-Forwarded-For), use different endpoints
+  for same function, timing-based throttle
+- **Auth bypass paths**: parameter override,
+  HTTP verb tampering, path normalization
+  (`/admin` vs `/Admin/` vs `/admin;`)
+- **Filter bypass**: alternative encodings,
+  null byte injection, double encoding,
+  unicode normalization issues
+
 ---
 
 ## BEFORE ISSUING EXPLOITABLE
@@ -287,6 +305,41 @@ Evidence: The route uses string concatenation.
 
 ---
 
+## RED TEAM EXTENSION: POST-EXPLOITATION
+
+After confirming EXPLOITABLE, DON'T STOP.
+Ask yourself:
+
+### "What does this unlock?"
+- Can I pivot to other endpoints?
+- Can I escalate privileges?
+- Can I access other users' data?
+- Can I reach internal services?
+- Can I access cloud infrastructure?
+
+### "What chains from here?"
+- Does this give me session cookies? → ATO
+- Does this give me credentials? → pivot
+- Does this give me internal access? → SSRF chain
+- Does this give me code execution? → full compromise
+
+### Chain Potential Assessment
+```markdown
+## Chain Potential: HIGH / MEDIUM / LOW
+
+### This finding unlocks:
+- [what access / data / capability]
+
+### Possible next steps (in scope):
+- [Chain A]: this → [next step] → [impact]
+- [Chain B]: this → [next step] → [impact]
+
+### Recommended: run /attack-chain to map
+full kill chain and maximize bounty.
+```
+
+---
+
 ## FINAL VERDICT
 
 End your report with exactly one line:
@@ -305,7 +358,7 @@ VERDICT: PARTIAL
 
 **EXPLOITABLE** — You ran a PoC that
 demonstrates the vulnerability. Report is
-bounty-ready.
+bounty-ready. Include chain potential.
 
 **NOT_EXPLOITABLE** — You tested and it's not
 actually a vuln (defense works, UUIDs, etc.).

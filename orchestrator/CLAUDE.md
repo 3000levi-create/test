@@ -59,14 +59,64 @@ claude "/checklist target.com"
 Never submit findings you haven't exploited.
 $5000 bounty vs "Informative" close.
 
+## Red Team Methodology
+
+This pipeline thinks like a penetration tester,
+not a scanner. The difference:
+
+```
+Scanner mindset:  "Found XSS" → report → $500
+Red team mindset: "Found XSS" → "what does
+  this unlock?" → chain → admin takeover
+  → full compromise → $15,000
+```
+
+### Kill Chain (every engagement)
+```
+RECON → INITIAL ACCESS → EXECUTION
+  → PERSISTENCE → PRIV ESCALATION
+  → LATERAL MOVEMENT → EXFILTRATION
+  → IMPACT
+```
+
+### Red Team Workflow
+```
+/analyze target.com
+    → individual findings
+    ↓
+/verify [each finding]
+    → EXPLOITABLE + chain potential
+    ↓
+/attack-chain [target]
+    → red-team agent maps kill chains
+    → chains vulns for max impact
+    ↓
+/report [chain report]
+    → full attack narrative
+    → submit chain + individuals
+```
+
+### Key Red Team Thinking
+- **"What does this unlock?"** — don't stop
+  at first foothold
+- **"Can this chain?"** — always look for
+  multi-stage paths
+- **"What's the worst case?"** — think like
+  an APT, not a scanner
+- **Post-exploitation** — what happens AFTER
+  initial access?
+- **Business logic** — race conditions,
+  negative values, state confusion
+
 ## Agents
 
 | Agent | Purpose |
 |-------|---------|
+| **red-team** | **Kill chain operator. Chains vulns into multi-stage attacks. Post-exploitation + lateral movement thinking** |
 | recon-agent | READ-ONLY. Subdomains, endpoints, tech fingerprinting |
-| code-auditor | Source review. 17 exclusions, 12 precedents, conf >= 8 |
-| vuln-analyzer | Deep-dive per vuln class with drop rules |
-| bounty-verifier | Adversarial verification. VERDICT output. "Try to break it" |
+| code-auditor | Source review. 17 exclusions, 12 precedents, conf >= 8. Red team lens |
+| vuln-analyzer | Deep-dive per vuln class. Chain potential + kill chain position |
+| bounty-verifier | Adversarial verification. VERDICT + post-exploitation + chain potential |
 | exploit-writer | Safe PoC development. Gated behind EXPLOITABLE verdict |
 | report-writer | HackerOne reports. Gated behind EXPLOITABLE verdict |
 | learner | Self-improving: learns from hunts, creates/refines skills |
@@ -83,9 +133,10 @@ $5000 bounty vs "Informative" close.
 | /verify | Adversarial exploit verification → VERDICT |
 | /report | HackerOne report (only after EXPLOITABLE) |
 
-### Strategy & Planning
+### Red Team & Strategy
 | Skill | What It Does |
 |-------|-------------|
+| /attack-chain | Chain findings into multi-stage kill chains. Bounty multiplier |
 | /plan-hunt | Read-only hunt strategy designer. Priority targets + execution plan |
 
 ### Self-Learning Loop
