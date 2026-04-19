@@ -108,11 +108,28 @@ RECON → INITIAL ACCESS → EXECUTION
 - **Business logic** — race conditions,
   negative values, state confusion
 
+### AD / Infrastructure Kill Chain
+```
+INITIAL FOOTHOLD → AD ENUMERATION
+  → CREDENTIAL HARVESTING (Kerberoast, LSASS)
+  → PRIVILEGE ESCALATION (ACL, AD CS, GPO)
+  → LATERAL MOVEMENT (PtH, PtT, WinRM)
+  → COERCION + RELAY (PetitPotam → AD CS)
+  → DOMAIN DOMINANCE (DCSync, Golden Ticket)
+  → PERSISTENCE (Silver Ticket, AdminSDHolder)
+  → FOREST COMPROMISE (trust abuse, SID History)
+```
+
+Use the `ad-infra` agent for AD engagements.
+It maps the full AD attack graph and finds
+the shortest path to Domain Admin.
+
 ## Agents
 
 | Agent | Purpose |
 |-------|---------|
-| **red-team** | **Kill chain operator. Chains vulns into multi-stage attacks. Post-exploitation + lateral movement thinking** |
+| **red-team** | **Kill chain operator. Chains vulns into multi-stage attacks. Post-exploitation + lateral movement** |
+| **ad-infra** | **AD/infrastructure red team. Kerberos, coercion, SCCM, ACL abuse, delegation, domain dominance** |
 | recon-agent | READ-ONLY. Subdomains, endpoints, tech fingerprinting |
 | code-auditor | Source review. 17 exclusions, 12 precedents, conf >= 8. Red team lens |
 | vuln-analyzer | Deep-dive per vuln class. Chain potential + kill chain position |
@@ -155,12 +172,21 @@ Auto-invoked when hunting that vuln class.
 Self-refining: success counters + changelogs.
 
 Current skills:
+
+**Web Application:**
 - hunt-idor — Numeric ID enumeration
 - hunt-ssrf — URL fetchers, webhooks, PDF gen
 - hunt-sqli — SQL injection patterns
 - hunt-xss — XSS (React-safe precedent)
 - hunt-auth-bypass — JWT, session, privesc
 - hunt-deserialization — Multi-language unsafe deser
+
+**Active Directory / Infrastructure:**
+- hunt-kerberos — Kerberoasting, AS-REP, Golden/Silver Ticket, delegation abuse
+- hunt-coercion — PetitPotam, PrinterBug, DFSCoerce, ShadowCoerce + NTLM relay
+- hunt-sccm — SCCM/MECM: NAA theft, PXE abuse, hierarchy takeover, client push
+- hunt-ad-privesc — ACL abuse, DCSync, AD CS (ESC1-8), GPO abuse, trust abuse
+- hunt-lateral-movement — PtH, PtT, DCOM, WinRM, PSExec, credential dumping
 
 ## Memory System
 

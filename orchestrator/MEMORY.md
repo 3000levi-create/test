@@ -150,12 +150,93 @@ curl -s "https://web.archive.org/cdx/search/cdx?url=TARGET/*&output=json&fl=orig
 grep -rn "exec\|eval\|system\|query\|innerHTML\|document.write\|fetch\|axios" --include="*.js" --include="*.ts" --include="*.py" .
 ```
 
+### Learned: 2026-04-19 — Kerberos Attacks
+- Severity: Critical (Domain Admin path)
+- Pattern: SPN accounts, missing pre-auth,
+  delegation misconfiguration
+- Techniques: Kerberoasting, AS-REP Roasting,
+  Golden/Silver Ticket, S4U delegation abuse
+- Key tools: GetUserSPNs, GetNPUsers, getST,
+  ticketer, Rubeus, hashcat
+- Skill: `hunt-kerberos`
+
+### Learned: 2026-04-19 — NTLM Coercion & Relay
+- Severity: Critical (DC compromise path)
+- Pattern: Machine account coercion to relay
+  for privilege escalation
+- Techniques: PetitPotam, PrinterBug,
+  DFSCoerce, ShadowCoerce → relay to AD CS,
+  LDAP, SMB
+- Key chain: Coerce DC → relay to AD CS →
+  DC certificate → DCSync → krbtgt
+- Skill: `hunt-coercion`
+
+### Learned: 2026-04-19 — SCCM/MECM Attacks
+- Severity: Critical (mass deployment)
+- Pattern: SCCM infrastructure misconfiguration
+- Techniques: NAA credential theft, PXE abuse,
+  client push relay, hierarchy takeover
+- Key chain: NAA credentials → DA, or site
+  server → deploy to all machines
+- Skill: `hunt-sccm`
+
+### Learned: 2026-04-19 — AD Privilege Escalation
+- Severity: Critical (Domain Admin path)
+- Pattern: ACL misconfiguration, AD CS template
+  flaws, GPO write access
+- Techniques: ACL abuse (GenericAll, WriteDACL,
+  WriteOwner), AD CS (ESC1-8), GPO abuse,
+  DCSync, forest trust abuse
+- Skill: `hunt-ad-privesc`
+
+### Learned: 2026-04-19 — Lateral Movement
+- Severity: High-Critical (spread + escalate)
+- Pattern: Credential reuse, hash passing,
+  ticket manipulation
+- Techniques: PtH, PtT, Overpass-the-Hash,
+  DCOM, WinRM, PSExec, WMI, credential dumping
+- Key insight: find machine with DA session →
+  dump LSASS → DA creds
+- Skill: `hunt-lateral-movement`
+
+## AD Attack Chains (High Value)
+
+### Chain: Kerberoast → Domain Admin
+```
+Low-priv user → Kerberoast SPN with adminCount=1
+  → crack password → DA credentials
+```
+
+### Chain: Coercion → DC Compromise
+```
+Domain user → PetitPotam DC → relay to AD CS
+  → DC certificate → DCSync → krbtgt
+  → Golden Ticket → Enterprise Admin
+```
+
+### Chain: SCCM → Mass Compromise
+```
+SCCM client → extract NAA credentials
+  → NAA is DA → DCSync → full domain
+```
+
+### Chain: ACL → Escalation
+```
+User with WriteDACL on domain
+  → grant self DCSync → dump krbtgt
+  → Golden Ticket
+```
+
 ## Stats
 
 - Total hunts: 1
 - Total findings: 1
 - Total bounties: $0 (pending)
-- Skills learned: 6
-- Skill list: hunt-idor, hunt-ssrf,
+- Skills learned: 11
+- Skill list:
+  Web: hunt-idor, hunt-ssrf,
   hunt-deserialization, hunt-sqli,
   hunt-xss, hunt-auth-bypass
+  AD/Infra: hunt-kerberos, hunt-coercion,
+  hunt-sccm, hunt-ad-privesc,
+  hunt-lateral-movement
