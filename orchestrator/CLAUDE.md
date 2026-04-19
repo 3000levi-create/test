@@ -2,167 +2,188 @@
 
 ## Overview
 
-This project uses Claude Code's multi-agent architecture
-for authorized security research on bug bounty programs
-(HackerOne, Bugcrowd, etc).
+Multi-agent bug bounty pipeline built on
+Claude Code's architecture. Self-improving:
+every hunt makes the next one faster.
 
-**IMPORTANT**: This is for AUTHORIZED security testing
-only. Always operate within the scope defined by the
-bug bounty program.
+**AUTHORIZED TESTING ONLY.** Always operate
+within the scope defined by the program.
 
-## How to Use
-
-### Quick Start — Full Pipeline
+## Quick Start
 
 ```bash
-# Run the full recon → analysis → report pipeline
-claude "run /recon on https://target.com"
-
-# Or use specific phases:
+# Full pipeline
 claude "/recon target.com"
-claude "/analyze target.com"  
-claude "/report"
+claude "/analyze target.com"
+claude "/verify [finding]"
+claude "/report [finding]"
+claude "/after-hunt"
+
+# Strategy first (new targets)
+claude "/plan-hunt target.com"
+
+# OWASP parallel scan (10 agents)
+claude "/checklist target.com"
 ```
 
-### Custom Agents
+## Professional Workflow
 
-```bash
-# Spawn specific agents:
-claude "use the recon-agent to map target.com"
-claude "use the code-auditor to review this source"
-claude "use the vuln-analyzer for the auth module"
+```
+/plan-hunt target.com
+    → strategy + priority targets
+    ↓
+/recon target.com
+    → 4 parallel agents map attack surface
+    ↓
+/security-review [path]
+    → senior-engineer code review (conf >= 8)
+    ↓
+/analyze [target]
+    → 4 parallel auditors (injection, auth,
+      data exposure, client-side)
+    ↓
+/verify [each finding]
+    → bounty-verifier: adversarial probes
+    → VERDICT: EXPLOITABLE / NOT / PARTIAL
+    ↓
+/report [EXPLOITABLE findings only]
+    → HackerOne-grade writeup + PoC
+    ↓
+/after-hunt
+    → update MEMORY.md + TARGETS.md
+    → create/refine hunt-[type] skill
+    → cross-reference other targets
 ```
 
-### Parallel Research (Batch)
+**The /verify step is NON-NEGOTIABLE.**
+Never submit findings you haven't exploited.
+$5000 bounty vs "Informative" close.
 
-```bash
-# Launch parallel research on multiple areas:
-claude "/batch audit all API endpoints for IDOR"
-```
-
-## Agent Types
+## Agents
 
 | Agent | Purpose |
 |-------|---------|
-| recon-agent | Subdomain, endpoint, tech discovery |
-| code-auditor | Source code vulnerability analysis |
-| vuln-analyzer | Deep-dive on specific vuln classes |
-| **bounty-verifier** | **Adversarial exploit proof. VERDICT: EXPLOITABLE/NOT/PARTIAL** |
-| exploit-writer | PoC development (authorized only) |
-| report-writer | HackerOne report formatting |
-| **learner** | **Self-improving: learns from hunts, creates/refines skills** |
+| recon-agent | READ-ONLY. Subdomains, endpoints, tech fingerprinting |
+| code-auditor | Source review. 17 exclusions, 12 precedents, conf >= 8 |
+| vuln-analyzer | Deep-dive per vuln class with drop rules |
+| bounty-verifier | Adversarial verification. VERDICT output. "Try to break it" |
+| exploit-writer | Safe PoC development. Gated behind EXPLOITABLE verdict |
+| report-writer | HackerOne reports. Gated behind EXPLOITABLE verdict |
+| learner | Self-improving: learns from hunts, creates/refines skills |
 
 ## Skills
 
-### Hunting Skills
-| Skill | Usage |
-|-------|-------|
-| /recon | Full reconnaissance pipeline |
-| /analyze | Vulnerability analysis |
-| /report | Generate HackerOne report |
-| /checklist | OWASP Top 10 checklist scan |
-| /security-review | Senior-engineer-grade review with 17 false-positive filters + confidence scoring (>= 8) |
-| /verify | **Adversarial exploit verification — prove before you report** |
+### Hunting Pipeline
+| Skill | What It Does |
+|-------|-------------|
+| /recon | 4 parallel recon-agents → attack surface map |
+| /analyze | 4 parallel code-auditors → vuln candidates |
+| /security-review | Senior-engineer review (17 exclusions, 12 precedents) |
+| /checklist | 10 parallel agents — one per OWASP Top 10 category |
+| /verify | Adversarial exploit verification → VERDICT |
+| /report | HackerOne report (only after EXPLOITABLE) |
 
-### Self-Learning Skills (Hermes-style)
-| Skill | Usage |
-|-------|-------|
-| /learn | Capture a technique as a reusable skill |
-| /after-hunt | Post-hunt feedback loop (auto-updates memory + skills) |
-| /memory | Review and manage persistent knowledge |
-| /memory target [name] | Create/update a target profile |
+### Strategy & Planning
+| Skill | What It Does |
+|-------|-------------|
+| /plan-hunt | Read-only hunt strategy designer. Priority targets + execution plan |
+
+### Self-Learning Loop
+| Skill | What It Does |
+|-------|-------------|
+| /learn | Capture technique as skill (4-round interview) |
+| /after-hunt | Post-hunt feedback loop (memory + skills + cross-ref) |
+| /memory | Review & manage persistent knowledge |
+| /memory target [name] | Create/update target profile |
+| /memory search [query] | Search across all memory layers |
+| /memory stats | Pipeline health dashboard |
 
 ### Auto-Learned Skills
-Skills created by the learning loop live in:
-`.claude/skills/learned/hunt-[type].md`
+Live in `.claude/skills/learned/hunt-[type].md`.
+Auto-invoked when hunting that vuln class.
+Self-refining: success counters + changelogs.
 
-They are automatically invoked when you search
-for that vulnerability type. The more you use
-them, the better they get.
+Current skills:
+- hunt-idor — Numeric ID enumeration
+- hunt-ssrf — URL fetchers, webhooks, PDF gen
+- hunt-sqli — SQL injection patterns
+- hunt-xss — XSS (React-safe precedent)
+- hunt-auth-bypass — JWT, session, privesc
+- hunt-deserialization — Multi-language unsafe deser
 
-## Memory System (Hermes-style)
+## Memory System
 
-Three persistent memory layers:
+Four persistent layers:
 
-| File | Purpose | Updated By |
-|------|---------|------------|
-| MEMORY.md | Techniques, patterns, stats | /after-hunt, /learn |
-| TARGETS.md | Target profiles & findings | /memory target, /after-hunt |
-| CLAUDE.md | Pipeline config & instructions | Manual |
+| Layer | File | Updated By |
+|-------|------|------------|
+| Techniques | MEMORY.md | /after-hunt, /learn |
+| Targets | TARGETS.md | /after-hunt, /memory target |
+| Learned skills | .claude/skills/learned/ | /learn, /after-hunt, learner |
+| Pipeline config | CLAUDE.md | Manual only |
+
+## Quality Standards
+
+Ported from Claude Code's security-review:
+
+### Confidence Threshold: >= 8/10
+Drop anything below 8. No noise.
+
+### 17 Hard Exclusions
+1. DoS / resource exhaustion
+2. Rate limiting absence
+3. Memory issues in safe languages
+4. Test file findings
+5. Log spoofing via user input
+6. Path-only SSRF (no network)
+7. Regex injection (ReDoS)
+8. Missing security headers (generic)
+9. Outdated CVEs (not exploitable)
+10. Info disclosure (version strings)
+11. CORS on public endpoints
+12. Missing cookie flags (generic)
+13. Clickjacking on non-sensitive pages
+14. Open redirect (low-impact)
+15. Username enumeration
+16. SSL/TLS config (generic)
+17. Documentation-only findings
+
+### 12 Precedents
+1. React/Angular: XSS-safe by default
+2. UUIDs: unguessable → not IDOR
+3. Client-side auth: not a vuln
+4. Environment variables: trusted
+5. Shell injection: rarely exploitable
+6. Logging URLs: safe (secrets = vuln)
+7. Prepared statements: safe from SQLi
+8. CSRF tokens: framework-handled
+9. Memory-safe languages: no BOF
+10. Type-safe ORMs: safe from injection
+11. Signed cookies: tamper-resistant
+12. OAuth state param: framework-handled
 
 ## Self-Improvement Loop
 
 ```
-Hunt for bugs
+Hunt → Find (or fail) → /after-hunt
     ↓
-Find vulnerability
-    ↓
-/after-hunt (automatic)
-    ↓
-├→ Update MEMORY.md (new technique)
-├→ Update TARGETS.md (new finding)
-├→ Create/refine skill in learned/
-└→ Cross-reference other targets
+├→ MEMORY.md: +1 technique or false positive
+├→ TARGETS.md: finding + session logged
+├→ hunt-[type].md: created or refined
+└→ Cross-reference: flag similar targets
     ↓
 Next hunt is faster + smarter
 ```
 
-Every hunt makes the pipeline better.
-Skills track their own success rate and
-refine their search patterns over time.
+Every hunt feeds the loop. Even failed hunts
+teach the pipeline what to skip next time.
 
-## Quality Standards (from Claude Code source)
+## Hard Rules
 
-All agents now apply senior-security-engineer
-rigor from Claude Code's `/security-review`:
-
-### Confidence Threshold: >= 8/10
-Findings below confidence 8 are dropped.
-No noise, no speculation.
-
-### 17 Hard Exclusions
-DoS, rate limits, memory issues, test files,
-log spoofing, path-only SSRF, regex injection,
-documentation findings, outdated CVEs,
-memory safety in safe languages, etc.
-
-### 12 Precedents (Nuanced)
-- React/Angular XSS-safe by default
-- UUIDs unguessable → not IDOR
-- Client-side auth checks → not vulns
-- Environment variables → trusted
-- Shell command injection rarely exploitable
-- Logging URLs safe, logging secrets = vuln
-
-This matches the bar of a senior security
-engineer reviewing a PR — not a noisy scanner.
-
-## Professional Hunt Workflow
-
-The full pipeline for quality reports:
-
-```
-1. /recon target.com
-   → map attack surface
-
-2. /security-review [path]
-   → find candidates (confidence >= 8)
-
-3. /verify [finding]
-   → bounty-verifier proves exploitation
-   → VERDICT: EXPLOITABLE / NOT / PARTIAL
-
-4. /report
-   → only if EXPLOITABLE verdict
-   → full HackerOne writeup with PoC
-
-5. /after-hunt
-   → capture technique
-   → refine hunt-[type] skill
-   → update MEMORY.md + TARGETS.md
-```
-
-**The `/verify` step is non-negotiable.**
-Never submit findings you haven't exploited.
-This is the difference between a $5000
-bounty and a "Informative" close.
+1. **Authorized scope only** — always
+2. **No reports without /verify** — always
+3. **Confidence >= 8** — or drop it
+4. **Safe payloads only** — alert(), id, version()
+5. **No data exfil beyond proof** — show access, stop
+6. **Preserve history** — append, don't overwrite
+7. **Cross-reference always** — connections multiply ROI
