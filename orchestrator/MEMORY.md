@@ -119,6 +119,13 @@
 - Stored XSS in admin-visible fields — High
 - Auth bypass on admin routes — Critical
 - JWT algorithm confusion — Critical
+- Race condition on payment/coupon — Critical
+- Multi-tenant confusion (SaaS B2B) — Critical
+- OAuth redirect_uri bypass → token theft — Critical
+- SAML XML Signature Wrapping → admin — Critical
+- GraphQL introspection + unauthenticated mutations — High
+- BOLA on nested API resources — High
+- Cloud metadata via SSRF → IAM privesc — Critical
 
 ### Common False Positives
 - Public API endpoints (no auth = not IDOR)
@@ -129,6 +136,9 @@
 - React `{variable}` (auto-escaped)
 - Parameterized queries with `$1` / `?`
 - API gateway handles auth externally
+- IMDSv2 (blocks most SSRF — needs PUT + header)
+- Feature-flagged admin endpoints (not reachable)
+- OAuth state param with PKCE (framework-handled)
 
 ## Tool Shortcuts
 
@@ -199,6 +209,82 @@ grep -rn "exec\|eval\|system\|query\|innerHTML\|document.write\|fetch\|axios" --
   dump LSASS → DA creds
 - Skill: `hunt-lateral-movement`
 
+### Learned: 2026-04-20 — Business Logic Attacks
+- Severity: Critical (CVSS 9.1+)
+- Pattern: Application business rules that can
+  be abused for financial or privilege gain
+- Key classes:
+  - Race conditions (TOCTOU on coupons, refunds)
+  - Multi-tenant confusion (tenant_id swap)
+  - Workflow bypass (skip payment/KYC)
+  - Price/quantity manipulation (negative qty)
+  - State machine abuse (cancel after shipped)
+  - Coupon stacking / reuse
+- Key indicators: no atomic transactions,
+  no SELECT FOR UPDATE, no distributed lock
+- Skill: `hunt-business-logic` (agent)
+
+### Learned: 2026-04-20 — OAuth/SAML/JWT Deep Attacks
+- Severity: Critical (CVSS 9.8)
+- Pattern: Authentication protocol implementation
+  flaws in production SSO stacks
+- Key classes:
+  - OAuth redirect_uri bypass (encoding, subdomain)
+  - SAML XML Signature Wrapping (XSW)
+  - JWT algorithm confusion (RS256→HS256)
+  - MFA bypass (flow skip, response manipulation)
+  - Account linking confusion (pre-registration)
+  - Session fixation (no rotation after login)
+- Key indicators: Auth0/Okta/OneLogin SSO in use,
+  custom JWT implementation, SAML endpoint exposed
+- Skill: `hunt-auth-deep` (agent)
+
+### Learned: 2026-04-20 — API-Specific Attacks
+- Severity: High-Critical
+- Pattern: API architecture-specific flaws that
+  traditional web scanners miss
+- Key classes:
+  - GraphQL introspection + unauthed mutations
+  - gRPC reflection + unauthed methods
+  - REST BOLA/BFLA/mass-assignment
+  - API version shadowing (v1 still live)
+  - Batching/alias rate-limit bypass (GraphQL)
+  - WebSocket state injection
+- Key indicators: /graphql endpoint, gRPC port,
+  Swagger/OpenAPI spec, mobile app backend
+- Skill: `hunt-api` (agent)
+
+### Learned: 2026-04-20 — Cloud Pivot (SSRF → IAM)
+- Severity: Critical (infrastructure compromise)
+- Pattern: SSRF or leaked keys chain into cloud
+  control plane access
+- Key classes:
+  - AWS: IMDSv1 → role → 20+ privesc paths
+  - Azure: IMDS → managed identity → ARM → AD
+  - GCP: IMDS → SA token → cross-project
+  - K8s: SA token → cluster-admin
+- Chain: SSRF → metadata → IAM → privesc → data
+- Key indicator: cloud provider detected in
+  surface-mapper fingerprint
+- Skill: `hunt-cloud` (agent)
+
+### Learned: 2026-04-20 — WAF/Bot Evasion
+- Severity: N/A (enabler technique)
+- Pattern: Mutations that bypass WAF/bot
+  detection for PoC delivery
+- Key classes:
+  - Encoding (double URL, unicode, hex)
+  - Comment injection (SQL context)
+  - Parameter pollution (HPP)
+  - Chunked transfer encoding
+  - HTTP/2 smuggling (H2.CL, H2.TE)
+  - TLS fingerprint (curl-impersonate)
+  - Bot detection (stealth plugin, FlareSolverr)
+- WAF-specific: Cloudflare null bytes,
+  AWS WAF size limits, Akamai _abck cookie,
+  Imperva encoding gaps
+- Skill: `hunt-evasion` (agent)
+
 ## AD Attack Chains (High Value)
 
 ### Chain: Kerberoast → Domain Admin
@@ -227,12 +313,59 @@ User with WriteDACL on domain
   → Golden Ticket
 ```
 
+## External Attack Chains (High Value)
+
+### Chain: XSS → Admin → SSO Pivot
+```
+Stored XSS on support ticket
+  → admin views → session stolen
+  → admin creates OAuth app with broad scope
+  → persistent access to all SSO services
+  → org-wide compromise
+```
+
+### Chain: SSRF → Cloud → Data
+```
+SSRF on /api/fetch-url
+  → AWS metadata (IMDSv1)
+  → IAM role with iam:AttachUserPolicy
+  → AdminAccess self-grant
+  → S3 backup bucket → customer DB
+```
+
+### Chain: OAuth + BOLA → Tenant Takeover
+```
+OAuth redirect_uri bypass (token leak)
+  → steal user token
+  → BOLA on /api/tenants/:id
+  → access all tenants' data
+  → cross-tenant admin escalation
+```
+
+### Chain: GraphQL + Race → Financial
+```
+GraphQL introspection → discover coupon mutation
+  → race condition on coupon apply (30 parallel)
+  → $50 coupon applied 28 times
+  → $1400 discount on $100 order
+```
+
+### Chain: JWT + Post-Exploit → Persistence
+```
+JWT alg confusion (RS256→HS256)
+  → forge admin JWT
+  → create webhook (persistent exfil)
+  → create API key (session-independent)
+  → survives password reset + MFA enable
+```
+
 ## Stats
 
 - Total hunts: 1
 - Total findings: 1
 - Total bounties: $0 (pending)
-- Skills learned: 11
+- Skills learned: 17
+- Agents: 18
 - Skill list:
   Web: hunt-idor, hunt-ssrf,
   hunt-deserialization, hunt-sqli,
@@ -240,3 +373,6 @@ User with WriteDACL on domain
   AD/Infra: hunt-kerberos, hunt-coercion,
   hunt-sccm, hunt-ad-privesc,
   hunt-lateral-movement
+  Advanced: hunt-api, hunt-business-logic,
+  hunt-auth-deep, hunt-cloud,
+  hunt-evasion, post-exploit-web

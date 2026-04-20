@@ -2,9 +2,12 @@
 
 ## Overview
 
-Multi-agent bug bounty pipeline built on
-Claude Code's architecture. Self-improving:
-every hunt makes the next one faster.
+Autonomous multi-agent bug bounty pipeline.
+One command (`/hunt target.com`) runs the
+full engagement end-to-end. Agents make
+decisions, spawn sub-agents, chain results.
+Self-improving: every hunt makes the next
+one faster.
 
 **AUTHORIZED TESTING ONLY.** Always operate
 within the scope defined by the program.
@@ -12,101 +15,84 @@ within the scope defined by the program.
 ## Quick Start
 
 ```bash
-# Full pipeline
-claude "/recon target.com"
+# One command — full autonomous pipeline
+claude "/hunt target.com"
+
+# Or run individual phases
+claude "/surface-map target.com"
+claude "/threat-emulate target.com"
 claude "/analyze target.com"
+claude "/hunt-api target.com"
+claude "/hunt-business-logic target.com"
+claude "/hunt-auth-deep target.com"
 claude "/verify [finding]"
+claude "/post-exploit-web [finding]"
+claude "/hunt-cloud [finding]"
+claude "/hunt-evasion [finding]"
+claude "/attack-chain target.com"
 claude "/report [finding]"
 claude "/after-hunt"
-
-# Strategy first (new targets)
-claude "/plan-hunt target.com"
-
-# OWASP parallel scan (10 agents)
-claude "/checklist target.com"
 ```
 
-## Professional Workflow
+## Autonomous Pipeline (/hunt)
 
 ```
-/plan-hunt target.com
-    → strategy + priority targets
+/hunt target.com
     ↓
-/recon target.com
-    → 4 parallel agents map attack surface
+hunt-orchestrator (decides everything)
     ↓
-/security-review [path]
-    → senior-engineer code review (conf >= 8)
+PHASE 1: Recon + OSINT + Threat (parallel)
+  ├─ surface-mapper
+  ├─ osint
+  └─ threat-emulator  ← picks APT playbook
     ↓
-/analyze [target]
-    → 4 parallel auditors (injection, auth,
-      data exposure, client-side)
+PHASE 2: Analysis (7 parallel auditors)
+  ├─ code-auditor × 4 (injection / auth /
+  │                    exposure / client)
+  ├─ api-auditor (GraphQL / gRPC / REST)
+  ├─ business-logic-auditor
+  └─ auth-deep-auditor (OAuth / SAML / JWT)
     ↓
-/verify [each finding]
-    → bounty-verifier: adversarial probes
-    → VERDICT: EXPLOITABLE / NOT / PARTIAL
+PHASE 3: Verify (parallel per finding)
+  └─ bounty-verifier × N
     ↓
-/report [EXPLOITABLE findings only]
-    → HackerOne-grade writeup + PoC
+PHASE 4: Chain + Pivot (conditional)
+  ├─ red-team (always)
+  ├─ cloud-pivot (if SSRF in chain)
+  └─ post-exploit-web (if admin in chain)
     ↓
-/after-hunt
-    → update MEMORY.md + TARGETS.md
-    → create/refine hunt-[type] skill
-    → cross-reference other targets
+PHASE 5: Evasion + OPSEC (conditional)
+  ├─ evasion-operator (if WAF blocks)
+  └─ opsec-operator (review before prod)
+    ↓
+PHASE 6: Report + Memory
+  ├─ report-writer (MITRE ATT&CK mapped)
+  └─ learner (update MEMORY + skills)
 ```
 
-**The /verify step is NON-NEGOTIABLE.**
-Never submit findings you haven't exploited.
-$5000 bounty vs "Informative" close.
+**No human intervention between phases.**
+Orchestrator decides autonomously based on
+findings.
 
 ## Red Team Methodology
 
-This pipeline thinks like a penetration tester,
-not a scanner. The difference:
+Not a scanner. Not a pentester. Red teamer.
 
 ```
-Scanner mindset:  "Found XSS" → report → $500
-Red team mindset: "Found XSS" → "what does
-  this unlock?" → chain → admin takeover
-  → full compromise → $15,000
+Scanner:  "Found XSS" → report → $500
+Pentester: "Found XSS + impact" → $2,000
+Red team: "XSS → admin session → webhook →
+  exfil all PII → SSO pivot → org-wide"
+  → $50,000
 ```
 
-### Kill Chain (every engagement)
+### External Kill Chain
 ```
-RECON → INITIAL ACCESS → EXECUTION
-  → PERSISTENCE → PRIV ESCALATION
-  → LATERAL MOVEMENT → EXFILTRATION
-  → IMPACT
+SURFACE MAP → OSINT → THREAT MODEL
+  → ANALYSIS → VERIFY → CHAIN
+  → CLOUD PIVOT → POST-EXPLOIT
+  → EVASION → REPORT
 ```
-
-### Red Team Workflow
-```
-/analyze target.com
-    → individual findings
-    ↓
-/verify [each finding]
-    → EXPLOITABLE + chain potential
-    ↓
-/attack-chain [target]
-    → red-team agent maps kill chains
-    → chains vulns for max impact
-    ↓
-/report [chain report]
-    → full attack narrative
-    → submit chain + individuals
-```
-
-### Key Red Team Thinking
-- **"What does this unlock?"** — don't stop
-  at first foothold
-- **"Can this chain?"** — always look for
-  multi-stage paths
-- **"What's the worst case?"** — think like
-  an APT, not a scanner
-- **Post-exploitation** — what happens AFTER
-  initial access?
-- **Business logic** — race conditions,
-  negative values, state confusion
 
 ### AD / Infrastructure Kill Chain
 ```
@@ -120,73 +106,148 @@ INITIAL FOOTHOLD → AD ENUMERATION
   → FOREST COMPROMISE (trust abuse, SID History)
 ```
 
-Use the `ad-infra` agent for AD engagements.
-It maps the full AD attack graph and finds
-the shortest path to Domain Admin.
+### Red Team Thinking
+- **"What does this unlock?"** — don't stop
+  at first foothold
+- **"Can this chain?"** — multi-stage paths
+- **"What's the worst case?"** — APT mindset
+- **"How does this look in logs?"** — OPSEC
+- **"What MITRE ATT&CK ID?"** — purple team
+- **Post-exploitation** — what happens AFTER
+- **Business logic** — race, state, price
 
-## Agents
+## Agents (18 total)
 
+### Master Coordinator
 | Agent | Purpose |
 |-------|---------|
-| **red-team** | **Kill chain operator. Chains vulns into multi-stage attacks. Post-exploitation + lateral movement** |
-| **ad-infra** | **AD/infrastructure red team. Kerberos, coercion, SCCM, ACL abuse, delegation, domain dominance** |
-| recon-agent | READ-ONLY. Subdomains, endpoints, tech fingerprinting |
-| code-auditor | Source review. 17 exclusions, 12 precedents, conf >= 8. Red team lens |
-| vuln-analyzer | Deep-dive per vuln class. Chain potential + kill chain position |
-| bounty-verifier | Adversarial verification. VERDICT + post-exploitation + chain potential |
-| exploit-writer | Safe PoC development. Gated behind EXPLOITABLE verdict |
-| report-writer | HackerOne reports. Gated behind EXPLOITABLE verdict |
-| learner | Self-improving: learns from hunts, creates/refines skills |
+| **hunt-orchestrator** | **Autonomous master. Full pipeline, spawns all sub-agents, decides everything** |
 
-## Skills
+### Intelligence / Recon
+| Agent | Purpose |
+|-------|---------|
+| **surface-mapper** | **GitHub dorks, S3 buckets, mobile backends, subdomain takeover, API spec** |
+| **osint** | **Tech stack, vendors, breach data correlation, threat profile** |
+| **threat-emulator** | **APT playbook selection + MITRE ATT&CK mapping** |
+| recon-agent | Basic passive recon (legacy) |
 
-### Hunting Pipeline
+### Analysis
+| Agent | Purpose |
+|-------|---------|
+| code-auditor | Source review (17 exclusions, 12 precedents) |
+| **api-auditor** | **OWASP API Top 10: GraphQL, gRPC, REST, WebSocket** |
+| **business-logic-auditor** | **Race, TOCTOU, multi-tenant, workflow, price** |
+| **auth-deep-auditor** | **OAuth/SAML/JWT/MFA/session deep dive** |
+| vuln-analyzer | Deep-dive per vuln class |
+
+### Verification + Exploitation
+| Agent | Purpose |
+|-------|---------|
+| bounty-verifier | Adversarial verification → VERDICT |
+| **red-team** | **Kill chain operator, post-exploit chaining** |
+| **cloud-pivot** | **SSRF → AWS/Azure/GCP, IAM privesc, STS chains** |
+| **post-exploit-web** | **Persistence, SSO pivot, blast radius mapping** |
+| ad-infra | AD red team (Kerberos, coercion, SCCM) |
+| exploit-writer | Safe PoC development |
+
+### OPSEC + Evasion
+| Agent | Purpose |
+|-------|---------|
+| **evasion-operator** | **WAF/bot/rate-limit bypass for PoC work** |
+| **opsec-operator** | **Detection-aware tradecraft, pre-action review** |
+
+### Reporting + Learning
+| Agent | Purpose |
+|-------|---------|
+| report-writer | HackerOne reports + MITRE mapping |
+| learner | Self-improving: learns from hunts |
+
+## Skills (20 total)
+
+### Master
 | Skill | What It Does |
 |-------|-------------|
-| /recon | 4 parallel recon-agents → attack surface map |
-| /analyze | 4 parallel code-auditors → vuln candidates |
-| /security-review | Senior-engineer review (17 exclusions, 12 precedents) |
-| /checklist | 10 parallel agents — one per OWASP Top 10 category |
-| /verify | Adversarial exploit verification → VERDICT |
-| /report | HackerOne report (only after EXPLOITABLE) |
+| **/hunt** | **One-command autonomous pipeline** |
 
-### Red Team & Strategy
+### Recon + Intelligence
 | Skill | What It Does |
 |-------|-------------|
-| /attack-chain | Chain findings into multi-stage kill chains. Bounty multiplier |
-| /plan-hunt | Read-only hunt strategy designer. Priority targets + execution plan |
+| **/surface-map** | **Advanced recon: GitHub, S3, mobile, takeovers** |
+| /recon | Basic 4-parallel recon (legacy) |
+| **/threat-emulate** | **APT playbook + MITRE ATT&CK** |
 
-### Self-Learning Loop
+### Analysis
 | Skill | What It Does |
 |-------|-------------|
-| /learn | Capture technique as skill (4-round interview) |
-| /after-hunt | Post-hunt feedback loop (memory + skills + cross-ref) |
-| /memory | Review & manage persistent knowledge |
-| /memory target [name] | Create/update target profile |
-| /memory search [query] | Search across all memory layers |
-| /memory stats | Pipeline health dashboard |
+| /analyze | 4 parallel code-auditors |
+| **/hunt-api** | **OWASP API Top 10 hunt** |
+| **/hunt-business-logic** | **Race, TOCTOU, state, price** |
+| **/hunt-auth-deep** | **OAuth/SAML/JWT/MFA** |
+| /security-review | Senior-engineer review |
+| /checklist | 10 parallel OWASP agents |
 
-### Auto-Learned Skills
-Live in `.claude/skills/learned/hunt-[type].md`.
-Auto-invoked when hunting that vuln class.
-Self-refining: success counters + changelogs.
+### Verify + Chain + Pivot
+| Skill | What It Does |
+|-------|-------------|
+| /verify | Adversarial exploit verification |
+| /attack-chain | Chain findings into kill chains |
+| **/hunt-cloud** | **SSRF → cloud → IAM privesc** |
+| **/post-exploit-web** | **Persistence, SSO pivot, blast radius** |
 
-Current skills:
+### Evasion
+| Skill | What It Does |
+|-------|-------------|
+| **/hunt-evasion** | **WAF / bot / rate-limit bypass** |
+
+### Reporting + Planning
+| Skill | What It Does |
+|-------|-------------|
+| /report | HackerOne report + MITRE ATT&CK |
+| /plan-hunt | Read-only hunt strategy |
+
+### Memory
+| Skill | What It Does |
+|-------|-------------|
+| /learn | Capture technique as skill |
+| /after-hunt | Post-hunt feedback loop |
+| /memory | Review persistent knowledge |
+
+### Auto-Learned (hunt-[type].md)
 
 **Web Application:**
 - hunt-idor — Numeric ID enumeration
-- hunt-ssrf — URL fetchers, webhooks, PDF gen
+- hunt-ssrf — URL fetchers, webhooks
 - hunt-sqli — SQL injection patterns
 - hunt-xss — XSS (React-safe precedent)
 - hunt-auth-bypass — JWT, session, privesc
-- hunt-deserialization — Multi-language unsafe deser
+- hunt-deserialization — Multi-lang unsafe deser
 
 **Active Directory / Infrastructure:**
-- hunt-kerberos — Kerberoasting, AS-REP, Golden/Silver Ticket, delegation abuse
-- hunt-coercion — PetitPotam, PrinterBug, DFSCoerce, ShadowCoerce + NTLM relay
-- hunt-sccm — SCCM/MECM: NAA theft, PXE abuse, hierarchy takeover, client push
-- hunt-ad-privesc — ACL abuse, DCSync, AD CS (ESC1-8), GPO abuse, trust abuse
-- hunt-lateral-movement — PtH, PtT, DCOM, WinRM, PSExec, credential dumping
+- hunt-kerberos — Kerberoasting, AS-REP, Golden/Silver
+- hunt-coercion — PetitPotam, PrinterBug, NTLM relay
+- hunt-sccm — SCCM/MECM attacks
+- hunt-ad-privesc — ACL, DCSync, AD CS (ESC1-8), GPO
+- hunt-lateral-movement — PtH, PtT, DCOM, WinRM
+
+## MITRE ATT&CK Integration
+
+Every finding mapped to ATT&CK technique IDs:
+
+- T1190 (Exploit Public-Facing App)
+- T1552.005 (Cloud Instance Metadata API)
+- T1528 (Steal Application Access Token)
+- T1539 (Steal Web Session Cookie)
+- T1556.007 (Hybrid Identity)
+- T1606.001 (Forge Web Cookies)
+- T1606.002 (Forge SAML Tokens)
+- T1550.001 (Application Access Token)
+- T1550.004 (Web Session Cookie)
+- T1558 (Steal/Forge Kerberos Tickets)
+- T1110 (Brute Force)
+- T1526 (Cloud Service Discovery)
+- T1530 (Data from Cloud Storage)
+- T1213 (Data from Info Repositories)
+- T1567 (Exfil Over Web Service)
 
 ## Memory System
 
@@ -196,12 +257,10 @@ Four persistent layers:
 |-------|------|------------|
 | Techniques | MEMORY.md | /after-hunt, /learn |
 | Targets | TARGETS.md | /after-hunt, /memory target |
-| Learned skills | .claude/skills/learned/ | /learn, /after-hunt, learner |
-| Pipeline config | CLAUDE.md | Manual only |
+| Learned skills | .claude/skills/learned/ | /learn, /after-hunt |
+| Pipeline config | CLAUDE.md | Manual |
 
 ## Quality Standards
-
-Ported from Claude Code's security-review:
 
 ### Confidence Threshold: >= 8/10
 Drop anything below 8. No noise.
@@ -239,6 +298,17 @@ Drop anything below 8. No noise.
 11. Signed cookies: tamper-resistant
 12. OAuth state param: framework-handled
 
+## OPSEC Defaults
+
+Every `/hunt` includes OPSEC review:
+
+- **Green:** passive recon, browsing, cookie
+  replay, valid creds
+- **Orange:** GraphQL introspection, OPTIONS,
+  TLS probing
+- **Red:** nmap, dirb, sqlmap default, Burp
+  active scan, parallel auth spray
+
 ## Self-Improvement Loop
 
 ```
@@ -252,15 +322,16 @@ Hunt → Find (or fail) → /after-hunt
 Next hunt is faster + smarter
 ```
 
-Every hunt feeds the loop. Even failed hunts
-teach the pipeline what to skip next time.
-
 ## Hard Rules
 
 1. **Authorized scope only** — always
 2. **No reports without /verify** — always
-3. **Confidence >= 8** — or drop it
+3. **Confidence >= 8** — or drop
 4. **Safe payloads only** — alert(), id, version()
-5. **No data exfil beyond proof** — show access, stop
+5. **No data exfil beyond proof** — access, stop
 6. **Preserve history** — append, don't overwrite
-7. **Cross-reference always** — connections multiply ROI
+7. **Cross-reference always**
+8. **Clean up everything you plant** — webhooks,
+   keys, OAuth apps, accounts
+9. **OPSEC review before production runs**
+10. **MITRE ATT&CK map every finding**
