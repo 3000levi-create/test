@@ -1,0 +1,378 @@
+# Bug Bounty Memory
+
+> This file persists across sessions.
+> Updated automatically by /after-hunt.
+
+## Techniques Library
+
+### Learned: 2026-04-13 — IDOR (Insecure Direct Object Reference)
+- Target: DemoCorp
+- Severity: High (CVSS 7.5)
+- Pattern: Numeric sequential IDs in REST API
+  without ownership validation
+- Discovery method:
+  1. Found `/api/v2/orders/{id}` in recon
+  2. Noticed IDs are sequential integers
+  3. Changed ID from 1001 → 1002
+  4. Got another user's order data
+- Key grep patterns:
+  - `/api/.*/:id` or `/api/.*/[0-9]+`
+  - `params.id` without `req.user` check
+  - `findById` without `where: { userId }`
+- False positives:
+  - Public resources (no auth needed)
+  - UUIDs (not guessable)
+- Skill: `hunt-idor`
+
+### Learned: 2026-04-13 — SSRF (Server-Side Request Forgery)
+- Severity: Critical (CVSS 9.1)
+- Pattern: Endpoints that fetch user-supplied
+  URLs without validation
+- Key indicators:
+  - Webhook registration endpoints
+  - PDF generation from URL
+  - Image proxy / avatar upload by URL
+  - Import from URL features
+- Key grep patterns:
+  - `fetch(req.body.url)` or `axios(userUrl)`
+  - `webhook|callback|notify_url|proxy`
+  - `pdf|screenshot|thumbnail|avatar.*url`
+- Bypass techniques: DNS rebinding, decimal IP,
+  IPv6 shorthand, redirect chains
+- Cloud metadata: `169.254.169.254` = jackpot
+- Skill: `hunt-ssrf`
+
+### Learned: 2026-04-13 — Insecure Deserialization
+- Severity: Critical (CVSS 9.8)
+- Pattern: User-controlled data passed to
+  unsafe deserialization functions
+- Key indicators per language:
+  - Python: `pickle.loads()`, `yaml.load()`
+  - Java: `ObjectInputStream`, `readObject()`
+  - PHP: `unserialize()`, `__wakeup()`
+  - Node.js: `node-serialize`, `js-yaml`
+  - .NET: `BinaryFormatter`, `TypeNameHandling`
+- Key grep patterns:
+  - `pickle.loads|yaml.load|marshal.loads`
+  - `ObjectInputStream|readObject|XMLDecoder`
+  - `unserialize|__wakeup|__destruct`
+- Network signatures: Java=`AC ED 00 05`,
+  PHP=`O:4:"Class"`, Python=`80 04 95`
+- Skill: `hunt-deserialization`
+
+### Learned: 2026-04-13 — SQL Injection
+- Severity: Critical (CVSS 9.8)
+- Pattern: User input concatenated into SQL
+  queries instead of parameterized
+- Key indicators:
+  - String concatenation in SQL statements
+  - ORM `.raw()` methods with user input
+  - Search/filter/sort endpoints
+- Key grep patterns:
+  - `query.*\`.*\${` (template literals)
+  - `"SELECT.*" + req.query`
+  - `sequelize.query|.raw(|cursor.execute`
+- High-value targets: search, sort, filter,
+  login, export/report endpoints
+- Skill: `hunt-sqli`
+
+### Learned: 2026-04-13 — XSS (Cross-Site Scripting)
+- Severity: Medium-High (CVSS 6.1-8.0)
+- Pattern: User input rendered in HTML without
+  proper output encoding
+- Key indicators:
+  - `dangerouslySetInnerHTML` (React)
+  - `v-html` (Vue), `bypassSecurityTrust` (Angular)
+  - `innerHTML = userInput`
+  - `<%- variable %>` (unescaped EJS)
+- Types: Stored > Reflected > DOM-based
+- Key grep patterns:
+  - `innerHTML|outerHTML|document.write`
+  - `dangerouslySetInnerHTML|v-html`
+  - `eval(|setTimeout(|Function(`
+- Skill: `hunt-xss`
+
+### Learned: 2026-04-13 — Auth Bypass
+- Severity: Critical (CVSS 9.1)
+- Pattern: Missing or misconfigured auth
+  middleware on sensitive endpoints
+- Key indicators:
+  - Routes without auth middleware
+  - JWT decode without verify
+  - Mass assignment on registration
+  - Token without expiration
+- Key grep patterns:
+  - `jwt.decode` (not `jwt.verify`)
+  - `router.get('/admin'` without middleware
+  - `{ username, password, role } = req.body`
+- Attack vectors: algorithm none, method switch,
+  path traversal, parameter pollution
+- Skill: `hunt-auth-bypass`
+
+## High-Value Patterns
+
+### Patterns That Pay Well
+- IDOR on order/payment endpoints — High sev
+- SSRF → AWS metadata credentials — Critical
+- Deserialization RCE via pickle/Java — Critical
+- SQLi on search/filter endpoints — Critical
+- Stored XSS in admin-visible fields — High
+- Auth bypass on admin routes — Critical
+- JWT algorithm confusion — Critical
+- Race condition on payment/coupon — Critical
+- Multi-tenant confusion (SaaS B2B) — Critical
+- OAuth redirect_uri bypass → token theft — Critical
+- SAML XML Signature Wrapping → admin — Critical
+- GraphQL introspection + unauthenticated mutations — High
+- BOLA on nested API resources — High
+- Cloud metadata via SSRF → IAM privesc — Critical
+
+### Common False Positives
+- Public API endpoints (no auth = not IDOR)
+- UUID-based IDs (not enumerable)
+- Client-side fetch() (can't reach internal)
+- `yaml.safe_load()` (safe variant)
+- `JSON.parse()` (no code execution)
+- React `{variable}` (auto-escaped)
+- Parameterized queries with `$1` / `?`
+- API gateway handles auth externally
+- IMDSv2 (blocks most SSRF — needs PUT + header)
+- Feature-flagged admin endpoints (not reachable)
+- OAuth state param with PKCE (framework-handled)
+
+## Tool Shortcuts
+
+### Fast Recon
+```bash
+# Quick subdomain enum
+curl -s "https://crt.sh/?q=%25.TARGET&output=json" | jq -r '.[].name_value' | sort -u
+
+# Quick tech fingerprint
+curl -sI https://TARGET | grep -i "server\|x-powered\|x-frame\|content-security"
+
+# Quick endpoint discovery
+curl -s "https://web.archive.org/cdx/search/cdx?url=TARGET/*&output=json&fl=original&collapse=urlkey" | jq -r '.[][]' | sort -u | head -50
+```
+
+### Fast Code Audit
+```bash
+# All dangerous sinks in one command
+grep -rn "exec\|eval\|system\|query\|innerHTML\|document.write\|fetch\|axios" --include="*.js" --include="*.ts" --include="*.py" .
+```
+
+### Learned: 2026-04-19 — Kerberos Attacks
+- Severity: Critical (Domain Admin path)
+- Pattern: SPN accounts, missing pre-auth,
+  delegation misconfiguration
+- Techniques: Kerberoasting, AS-REP Roasting,
+  Golden/Silver Ticket, S4U delegation abuse
+- Key tools: GetUserSPNs, GetNPUsers, getST,
+  ticketer, Rubeus, hashcat
+- Skill: `hunt-kerberos`
+
+### Learned: 2026-04-19 — NTLM Coercion & Relay
+- Severity: Critical (DC compromise path)
+- Pattern: Machine account coercion to relay
+  for privilege escalation
+- Techniques: PetitPotam, PrinterBug,
+  DFSCoerce, ShadowCoerce → relay to AD CS,
+  LDAP, SMB
+- Key chain: Coerce DC → relay to AD CS →
+  DC certificate → DCSync → krbtgt
+- Skill: `hunt-coercion`
+
+### Learned: 2026-04-19 — SCCM/MECM Attacks
+- Severity: Critical (mass deployment)
+- Pattern: SCCM infrastructure misconfiguration
+- Techniques: NAA credential theft, PXE abuse,
+  client push relay, hierarchy takeover
+- Key chain: NAA credentials → DA, or site
+  server → deploy to all machines
+- Skill: `hunt-sccm`
+
+### Learned: 2026-04-19 — AD Privilege Escalation
+- Severity: Critical (Domain Admin path)
+- Pattern: ACL misconfiguration, AD CS template
+  flaws, GPO write access
+- Techniques: ACL abuse (GenericAll, WriteDACL,
+  WriteOwner), AD CS (ESC1-8), GPO abuse,
+  DCSync, forest trust abuse
+- Skill: `hunt-ad-privesc`
+
+### Learned: 2026-04-19 — Lateral Movement
+- Severity: High-Critical (spread + escalate)
+- Pattern: Credential reuse, hash passing,
+  ticket manipulation
+- Techniques: PtH, PtT, Overpass-the-Hash,
+  DCOM, WinRM, PSExec, WMI, credential dumping
+- Key insight: find machine with DA session →
+  dump LSASS → DA creds
+- Skill: `hunt-lateral-movement`
+
+### Learned: 2026-04-20 — Business Logic Attacks
+- Severity: Critical (CVSS 9.1+)
+- Pattern: Application business rules that can
+  be abused for financial or privilege gain
+- Key classes:
+  - Race conditions (TOCTOU on coupons, refunds)
+  - Multi-tenant confusion (tenant_id swap)
+  - Workflow bypass (skip payment/KYC)
+  - Price/quantity manipulation (negative qty)
+  - State machine abuse (cancel after shipped)
+  - Coupon stacking / reuse
+- Key indicators: no atomic transactions,
+  no SELECT FOR UPDATE, no distributed lock
+- Skill: `hunt-business-logic` (agent)
+
+### Learned: 2026-04-20 — OAuth/SAML/JWT Deep Attacks
+- Severity: Critical (CVSS 9.8)
+- Pattern: Authentication protocol implementation
+  flaws in production SSO stacks
+- Key classes:
+  - OAuth redirect_uri bypass (encoding, subdomain)
+  - SAML XML Signature Wrapping (XSW)
+  - JWT algorithm confusion (RS256→HS256)
+  - MFA bypass (flow skip, response manipulation)
+  - Account linking confusion (pre-registration)
+  - Session fixation (no rotation after login)
+- Key indicators: Auth0/Okta/OneLogin SSO in use,
+  custom JWT implementation, SAML endpoint exposed
+- Skill: `hunt-auth-deep` (agent)
+
+### Learned: 2026-04-20 — API-Specific Attacks
+- Severity: High-Critical
+- Pattern: API architecture-specific flaws that
+  traditional web scanners miss
+- Key classes:
+  - GraphQL introspection + unauthed mutations
+  - gRPC reflection + unauthed methods
+  - REST BOLA/BFLA/mass-assignment
+  - API version shadowing (v1 still live)
+  - Batching/alias rate-limit bypass (GraphQL)
+  - WebSocket state injection
+- Key indicators: /graphql endpoint, gRPC port,
+  Swagger/OpenAPI spec, mobile app backend
+- Skill: `hunt-api` (agent)
+
+### Learned: 2026-04-20 — Cloud Pivot (SSRF → IAM)
+- Severity: Critical (infrastructure compromise)
+- Pattern: SSRF or leaked keys chain into cloud
+  control plane access
+- Key classes:
+  - AWS: IMDSv1 → role → 20+ privesc paths
+  - Azure: IMDS → managed identity → ARM → AD
+  - GCP: IMDS → SA token → cross-project
+  - K8s: SA token → cluster-admin
+- Chain: SSRF → metadata → IAM → privesc → data
+- Key indicator: cloud provider detected in
+  surface-mapper fingerprint
+- Skill: `hunt-cloud` (agent)
+
+### Learned: 2026-04-20 — WAF/Bot Evasion
+- Severity: N/A (enabler technique)
+- Pattern: Mutations that bypass WAF/bot
+  detection for PoC delivery
+- Key classes:
+  - Encoding (double URL, unicode, hex)
+  - Comment injection (SQL context)
+  - Parameter pollution (HPP)
+  - Chunked transfer encoding
+  - HTTP/2 smuggling (H2.CL, H2.TE)
+  - TLS fingerprint (curl-impersonate)
+  - Bot detection (stealth plugin, FlareSolverr)
+- WAF-specific: Cloudflare null bytes,
+  AWS WAF size limits, Akamai _abck cookie,
+  Imperva encoding gaps
+- Skill: `hunt-evasion` (agent)
+
+## AD Attack Chains (High Value)
+
+### Chain: Kerberoast → Domain Admin
+```
+Low-priv user → Kerberoast SPN with adminCount=1
+  → crack password → DA credentials
+```
+
+### Chain: Coercion → DC Compromise
+```
+Domain user → PetitPotam DC → relay to AD CS
+  → DC certificate → DCSync → krbtgt
+  → Golden Ticket → Enterprise Admin
+```
+
+### Chain: SCCM → Mass Compromise
+```
+SCCM client → extract NAA credentials
+  → NAA is DA → DCSync → full domain
+```
+
+### Chain: ACL → Escalation
+```
+User with WriteDACL on domain
+  → grant self DCSync → dump krbtgt
+  → Golden Ticket
+```
+
+## External Attack Chains (High Value)
+
+### Chain: XSS → Admin → SSO Pivot
+```
+Stored XSS on support ticket
+  → admin views → session stolen
+  → admin creates OAuth app with broad scope
+  → persistent access to all SSO services
+  → org-wide compromise
+```
+
+### Chain: SSRF → Cloud → Data
+```
+SSRF on /api/fetch-url
+  → AWS metadata (IMDSv1)
+  → IAM role with iam:AttachUserPolicy
+  → AdminAccess self-grant
+  → S3 backup bucket → customer DB
+```
+
+### Chain: OAuth + BOLA → Tenant Takeover
+```
+OAuth redirect_uri bypass (token leak)
+  → steal user token
+  → BOLA on /api/tenants/:id
+  → access all tenants' data
+  → cross-tenant admin escalation
+```
+
+### Chain: GraphQL + Race → Financial
+```
+GraphQL introspection → discover coupon mutation
+  → race condition on coupon apply (30 parallel)
+  → $50 coupon applied 28 times
+  → $1400 discount on $100 order
+```
+
+### Chain: JWT + Post-Exploit → Persistence
+```
+JWT alg confusion (RS256→HS256)
+  → forge admin JWT
+  → create webhook (persistent exfil)
+  → create API key (session-independent)
+  → survives password reset + MFA enable
+```
+
+## Stats
+
+- Total hunts: 1
+- Total findings: 1
+- Total bounties: $0 (pending)
+- Skills learned: 17
+- Agents: 18
+- Skill list:
+  Web: hunt-idor, hunt-ssrf,
+  hunt-deserialization, hunt-sqli,
+  hunt-xss, hunt-auth-bypass
+  AD/Infra: hunt-kerberos, hunt-coercion,
+  hunt-sccm, hunt-ad-privesc,
+  hunt-lateral-movement
+  Advanced: hunt-api, hunt-business-logic,
+  hunt-auth-deep, hunt-cloud,
+  hunt-evasion, post-exploit-web
